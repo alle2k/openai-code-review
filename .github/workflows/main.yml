@@ -1,4 +1,4 @@
-name: Build and Run OpanAiCodeReview
+name: Build and Run OpenAiCodeReview
 
 on:
   push:
@@ -28,5 +28,5 @@ jobs:
         run: mvn dependency:copy -Dartifact=xyz.zhaokai:openai-code-review-sdk:1.0-SNAPSHOT -DoutputDirectory=./libs
 
       - name: Run Code Review
-        run: java -jar ./libs/openai-code-review-sdk.1.0-SNAPSHOT.jar
+        run: java -jar ./libs/openai-code-review-sdk-1.0-SNAPSHOT.jar
       
