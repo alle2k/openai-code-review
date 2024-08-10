@@ -133,7 +133,8 @@
                 <configuration>
                     <artifactSet>
                         <includes>
-                            <include>com.google.guava:guava:jar:</include>
+                            <include>*:*</include>
+                            <!--<include>com.google.guava:guava:jar:</include>
                             <include>com.alibaba.fastjson2:fastjson2:jar:</include>
                             <include>org.slf4j:slf4j-api:jar:</include>
                             <include>org.slf4j:slf4j-simple:jar:</include>
@@ -144,7 +145,7 @@
                             <include>org.eclipse.jgit:org.eclipse.jgit:</include>
                             <include>cn.bigmodel.openapi:oapi-java-sdk:</include>
                             <include>cn.hutool:hutool-all:</include>
-                            <include>com.squareup.okhttp3:okhttp:jar:</include>
+                            <include>com.squareup.okhttp3:okhttp:jar:</include>-->
                         </includes>
                     </artifactSet>
                 </configuration>
