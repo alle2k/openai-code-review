@@ -27,7 +27,21 @@ jobs:
       - name: Package with Maven
         run: mvn package
 
+      - name: Get Repository name
+        run: echo "REPO_NAME=${GITHUB_REPOSITORY##*/}" >> $GITHUB_ENV
+
+      - name: Get Branch name
+        run: echo "BRANCH_NAME=${GITHUB_REF##refs/heads/}" >> $GITHUB_ENV
+
       - name: Run Code Review
         run: java -jar ./openai-code-review-sdk/target/openai-code-review-sdk-1.0-SNAPSHOT.jar
         env:
+          GITHUB_REVIEW_LOG_URI: ${{ secrets.CODE_REVIEW_LOG_URI }}
           GITHUB_TOKEN: ${{ secrets.CODE_TOKEN }}
+          COMMIT_PROJECT: ${{ secrets.REPO_NAME }}
+          COMMIT_BRANCH: ${{ secrets.BRANCH_NAME }}
+          CHATGLM_APIKEYSECRET: ${{ secrets.CHATGLM_APIKEYSECRET }}
+          WECHAT_APPID: ${{ secrets.WECHAT_APPID }}
+          WECHAT_SECRET: ${{ secrets.WECHAT_SECRET }}
+          WECHAT_TO_USER: ${{ secrets.WECHAT_TO_USER }}
+          WECHAT_TEMP_ID: ${{ secrets.WECHAT_TEMP_ID }}

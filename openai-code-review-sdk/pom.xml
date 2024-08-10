@@ -75,6 +75,11 @@
             <artifactId>oapi-java-sdk</artifactId>
             <version>release-V4-2.0.2</version>
         </dependency>
+        <dependency>
+            <groupId>cn.hutool</groupId>
+            <artifactId>hutool-all</artifactId>
+            <version>5.8.25</version>
+        </dependency>
     </dependencies>
 
     <build>
@@ -138,6 +143,7 @@
                             <include>com.fasterxml.jackson.core:jackson-annotations:</include>
                             <include>org.eclipse.jgit:org.eclipse.jgit:</include>
                             <include>cn.bigmodel.openapi:oapi-java-sdk:</include>
+                            <include>cn.hutool:hutool-all:</include>
                         </includes>
                     </artifactSet>
                 </configuration>

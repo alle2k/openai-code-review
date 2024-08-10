@@ -1,11 +1,17 @@
 package xyz.zhaokai.middleware.sdk;
 
+import cn.hutool.http.HttpUtil;
+import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONObject;
 import com.zhipu.oapi.ClientV4;
 import com.zhipu.oapi.Constants;
 import com.zhipu.oapi.service.v4.model.ChatCompletionRequest;
 import com.zhipu.oapi.service.v4.model.ChatMessage;
 import com.zhipu.oapi.service.v4.model.ChatMessageRole;
 import com.zhipu.oapi.service.v4.model.ModelApiResponse;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
@@ -17,52 +23,86 @@ import java.io.FileWriter;
 import java.io.InputStreamReader;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 
 @Slf4j
 public class OpenAiCodeReview {
 
-    public static void main(String[] args) throws Exception {
-        System.out.println("运行测试");
+    private static String AUTHOR;
+    private static String MESSAGE;
+    private static final String PROJECT;
+    private static final String BRANCH;
+    private static final String GPT_MODEL = "glm-4-flash";
 
-        ProcessBuilder processBuilder = new ProcessBuilder("git", "diff", "HEAD~1", "HEAD");
+    public static void main(String[] args) throws Exception {
+        String diffCode = getDiffCode();
+        String reviewContent = invoke(diffCode);
+        writeLog(reviewContent);
+        sendWechatTempMsg();
+    }
+
+    private static String getDiffCode() throws Exception {
+        ProcessBuilder processBuilder = new ProcessBuilder("git", "log", "-1", "--pretty=format:%h");
         Process process = processBuilder.start();
+        String shortCommitId;
+        try (BufferedReader buffer = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+            shortCommitId = buffer.readLine();
+        }
+        process.waitFor();
+
+        processBuilder = new ProcessBuilder("git", "log", "-1", "--pretty=format:%an <%ae>", shortCommitId);
+        process = processBuilder.start();
+        try (BufferedReader buffer = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+            AUTHOR = buffer.readLine();
+        }
+        process.waitFor();
+
+        processBuilder = new ProcessBuilder("git", "log", "-1", "--pretty=format:%s", shortCommitId);
+        process = processBuilder.start();
+        try (BufferedReader buffer = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+            MESSAGE = buffer.readLine();
+        }
+        process.waitFor();
+
+        processBuilder = new ProcessBuilder("git", "diff", shortCommitId + "^", shortCommitId);
+        process = processBuilder.start();
         StringBuilder diffCode = new StringBuilder();
-        try (BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(process.getInputStream()));) {
+        try (BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
             String line;
             while (!StringUtils.isEmptyOrNull(line = bufferedReader.readLine())) {
                 diffCode.append(line);
             }
         }
         process.waitFor();
-        System.out.println(diffCode);
-//        testInvoke(diffCode.toString());
-        writeLog();
+        return diffCode.toString();
     }
 
-    private static void testInvoke(String diffCode) {
-        List<ChatMessage> messages = new ArrayList<>();
+    private static String invoke(String diffCode) {
+        // 2a75f5756d9a7fa11fa9623459c1bbae.agZET2kIyUq897Mw
+        String apiSecretKey = System.getenv("CHATGLM_APIKEYSECRET");
         ChatMessage chatMessage = new ChatMessage(ChatMessageRole.USER.value(), String.format("你是一个高级编程架构师，精通各类场景方案、架构设计和编程语言请，请您根据git diff记录，对代码做出评审。代码如下:%s", diffCode));
-        messages.add(chatMessage);
         String requestId = String.format("zhaokai-%d", System.currentTimeMillis());
-        ClientV4 client = new ClientV4.Builder("2a75f5756d9a7fa11fa9623459c1bbae.agZET2kIyUq897Mw").build();
+        ClientV4 client = new ClientV4.Builder(apiSecretKey).build();
         ChatCompletionRequest chatCompletionRequest = ChatCompletionRequest.builder()
-                .model("glm-4-flash")
+                .model(GPT_MODEL)
                 .stream(Boolean.FALSE)
                 .invokeMethod(Constants.invokeMethod)
-                .messages(messages)
+                .messages(Collections.singletonList(chatMessage))
                 .requestId(requestId)
                 .build();
         ModelApiResponse invokeModelApiResp = client.invokeModelApi(chatCompletionRequest);
-        log.info("response:{}", invokeModelApiResp.getData().getChoices().get(0).getMessage().getContent());
+        return (String) invokeModelApiResp.getData().getChoices().get(0).getMessage().getContent();
     }
 
     @SuppressWarnings("all")
-    private static void writeLog() throws Exception {
+    private static void writeLog(String reviewContent) throws Exception {
         String token = System.getenv("GITHUB_TOKEN");
+        // "https://github.com/alle2k/openai-code-review-log.git"
+        String githubReviewLogUri = System.getenv("GITHUB_REVIEW_LOG_URI");
         Git git = Git.cloneRepository()
-                .setURI("https://github.com/alle2k/openai-code-review-log.git")
+                .setURI(githubReviewLogUri)
                 .setDirectory(new File("repo"))
                 .setCredentialsProvider(new UsernamePasswordCredentialsProvider(token, ""))
                 .call();
@@ -70,48 +110,54 @@ public class OpenAiCodeReview {
         if (!folder.exists()) {
             folder.mkdirs();
         }
-        File file = new File(folder, String.format("review-%d%s", System.currentTimeMillis(), ".md"));
-        try (FileWriter fileWriter = new FileWriter(file);) {
-            fileWriter.write("根据提供的`git diff`记录，我们可以看到以下变更：\n" +
-                    "\n" +
-                    "```\n" +
-                    "diff --git a/openai-code-review-sdk/src/main/java/xyz/zhaokai/middleware/sdk/OpenAiCodeReview.java b/openai-code-review-sdk/src/main/java/xyz/zhaokai/middleware/sdk/OpenAiCodeReview.java\n" +
-                    "index c6c60e1..9b6af9b 100644\n" +
-                    "--- a/openai-code-review-sdk/src/main/java/xyz/zhaokai/middleware/sdk/OpenAiCodeReview.java\n" +
-                    "+++ b/openai-code-review-sdk/src/main/java/xyz/zhaokai/middleware/sdk/OpenAiCodeReview.java\n" +
-                    "@@ -6,7 +6,7 @@\n" +
-                    " import java.io.BufferedReader;\n" +
-                    " import java.io.InputStreamReader;\n" +
-                    " \n" +
-                    "-public class OpenAiCodeReview {\n" +
-                    "+    public static void main(String[] args) throws Exception {\n" +
-                    "         System.out.println(\"运行测试\");\n" +
-                    " }\n" +
-                    "```\n" +
-                    "\n" +
-                    "以下是针对这个变更的代码评审：\n" +
-                    "\n" +
-                    "1. **代码风格和命名**：\n" +
-                    "   - 文件名和类名之间的空格是不必要的。通常，文件名和类名应该紧挨在一起，没有空格。因此，`OpenAiCodeReview.java` 应该是 `OpenAiCodeReview.java`。\n" +
-                    "\n" +
-                    "2. **类定义和主方法**：\n" +
-                    "   - 在原始代码中，`OpenAiCodeReview` 类没有明确的主方法（`main` 方法）。然而，在更改后的代码中，`main` 方法被添加到类定义中，这是正确的做法，因为 `main` 方法是应用程序的入口点。\n" +
-                    "   - 在 `main` 方法中，只有一个打印语句 `System.out.println(\"运行测试\");`。这看起来像是一个测试或示例打印，没有实际的功能实现。如果这个类是为了测试而设计的，那么这是可以接受的。但是，如果这是一个生产环境中的代码，那么它应该有一些实际的功能或逻辑。\n" +
-                    "\n" +
-                    "3. **异常处理**：\n" +
-                    "   - `main` 方法中使用了 `throws Exception`，这是一个非常宽泛的异常处理方式。在实际的应用程序中，最好捕获可能发生的具体异常，并相应地处理它们。这样做可以提高代码的健壮性和可读性。\n" +
-                    "\n" +
-                    "4. **代码注释**：\n" +
-                    "   - 在 `main` 方法之前，应该有一个类注释来描述 `OpenAiCodeReview` 类的目的。同时，添加一个方法注释来描述 `main` 方法的功能也是好的实践。\n" +
-                    "\n" +
-                    "总结：\n" +
-                    "- 代码风格需要调整，移除不必要的空格。\n" +
-                    "- `main` 方法应该包含实际的功能或逻辑，或者至少应该有一个清晰的注释说明它的目的。\n" +
-                    "- 异常处理应该更加具体。\n" +
-                    "- 增加必要的注释以提高代码的可读性和可维护性。");
+        File file = new File(folder, String.format("%s-%s-%s-%d%s", PROJECT.replace(".git", ""), BRANCH, AUTHOR.split(" ")[0], System.currentTimeMillis(), ".md"));
+        try (FileWriter fileWriter = new FileWriter(file)) {
+            fileWriter.write(reviewContent);
         }
         git.add().addFilepattern(String.format("%s%s%s", file.getParentFile().getName(), "/", file.getName())).call();
         git.commit().setMessage("upload review code log").call();
         git.push().setCredentialsProvider(new UsernamePasswordCredentialsProvider(token, "")).call();
+    }
+
+    private static void sendWechatTempMsg() {
+        // appid:wx0bc0db26091b6a12
+        String wechatAppid = System.getenv("WECHAT_APPID");
+        // secret:7adb2d9c491c8242590f8166ae392f3f
+        String wechatSecret = System.getenv("WECHAT_SECRET");
+        String tokenResponseStr = HttpUtil.get(String.format("https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=%s&secret=%s", wechatAppid, wechatSecret));
+        JSONObject jsonObject = JSON.parseObject(tokenResponseStr);
+        String accessToken = jsonObject.getString("access_token");
+
+        // ohfu_6eB47rBvK-QnIDs8nOzvF3U
+        String wechatToUser = System.getenv("WECHAT_TO_USER");
+        // AQ4TNpItfp35b_1AjThSXrTqAf-hVogTX043mlKjbY0
+        String wechatTempId = System.getenv("WECHAT_TEMP_ID");
+        Map<String, Object> param = new HashMap<>();
+        param.put("touser", wechatToUser);
+        param.put("template_id", wechatTempId);
+        Map<String, Model> data;
+        param.put("data", data = new HashMap<>());
+        data.put("repo_name", new Model(PROJECT));
+        data.put("branch_name", new Model(BRANCH));
+        data.put("commit_author", new Model(AUTHOR));
+        data.put("commit_message", new Model(MESSAGE));
+        HttpUtil.post(String.format("https://api.weixin.qq.com/cgi-bin/message/template/send?access_token=%s", accessToken), JSON.toJSONString(param));
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    static class Model {
+        String value;
+        String color = "#173177";
+
+        public Model(String value) {
+            this.value = value;
+        }
+    }
+
+    static {
+        PROJECT = System.getenv("COMMIT_PROJECT");
+        BRANCH = System.getenv("COMMIT_BRANCH");
     }
 }
