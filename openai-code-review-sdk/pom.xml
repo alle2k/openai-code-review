@@ -144,6 +144,7 @@
                             <include>org.eclipse.jgit:org.eclipse.jgit:</include>
                             <include>cn.bigmodel.openapi:oapi-java-sdk:</include>
                             <include>cn.hutool:hutool-all:</include>
+                            <include>com.squareup.okhttp3:okhttp:jar:</include>
                         </includes>
                     </artifactSet>
                 </configuration>
