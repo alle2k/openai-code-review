@@ -41,9 +41,11 @@ public class OpenAiCodeReview {
         String reviewContent = invoke(diffCode);
         writeLog(reviewContent);
         sendWechatTempMsg();
+    }
+
+    private static void test0(){
         if(1==1){
             int i =1/0   ;
-
         }
     }
 
