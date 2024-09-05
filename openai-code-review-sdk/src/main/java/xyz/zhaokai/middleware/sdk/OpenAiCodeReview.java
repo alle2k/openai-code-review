@@ -47,6 +47,9 @@ public class OpenAiCodeReview {
         if(1==1){
             int i =1/0   ;
         }
+        System.out.println("这里不会运行");
+        for(;;){
+        }
     }
 
     private static String getDiffCode() throws Exception {
