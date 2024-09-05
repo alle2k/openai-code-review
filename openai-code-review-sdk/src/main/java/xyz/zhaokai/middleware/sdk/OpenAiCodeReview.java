@@ -52,6 +52,15 @@ public class OpenAiCodeReview {
         }
     }
 
+    private static void test1(){
+        if(1==1){
+            int i =1/0   ;
+        }
+        System.out.println("这里不会运行");
+        for(;;){
+        }
+    }
+
     private static String getDiffCode() throws Exception {
         ProcessBuilder processBuilder = new ProcessBuilder("git", "log", "-1", "--pretty=format:%h");
         Process process = processBuilder.start();
